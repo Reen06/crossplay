@@ -1,13 +1,9 @@
 # Generic ARM64 (Raspberry Pi) CPU-only overrides
 # Extends compose.yaml with ARM64 CPU-only configuration
+# Services are defined in profile files (profiles/*.yaml)
 
 version: '3.8'
 
-services:
-  # ARM64 CPU-only configuration
-  # No GPU support, optimized for Raspberry Pi or other ARM64 devices
-  
-  environment:
-    - ARM64_HOST=true
-    - CPU_ONLY=true
+# This file can be used to add ARM64-specific overrides when needed
+# Currently empty as services are defined in profile files
 

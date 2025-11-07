@@ -59,73 +59,95 @@ EOF
 
 # Interactive repo selection
 echo "=== Repository Configuration ==="
-echo "Please specify paths to sibling repositories (press Enter to skip)"
+echo "Add sibling repositories. Enter repo name and path for each repository."
+echo "Common repo types: video, ros2, nlp (or any custom name)"
+echo "Type 'done' when finished adding repositories."
 echo ""
 
-# Video processing repo
-read -p "Video processing repo path [../video-processing]: " VIDEO_PATH
-VIDEO_PATH=${VIDEO_PATH:-../video-processing}
-VIDEO_ABS=$(cd "$PROJECT_ROOT" && cd "$VIDEO_PATH" 2>/dev/null && pwd || echo "")
-if [ -n "$VIDEO_ABS" ] && [ -d "$VIDEO_ABS" ]; then
-    echo "  ✓ Video repo found: $VIDEO_ABS"
-    cat >> "$REPOS_CONFIG" << EOF
-  video:
+REPO_COUNT=0
+while true; do
+    read -p "Repository name (or 'done' to finish): " REPO_NAME
+    REPO_NAME=$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]' | xargs)
+    
+    if [ -z "$REPO_NAME" ]; then
+        continue
+    fi
+    
+    if [ "$REPO_NAME" = "done" ] || [ "$REPO_NAME" = "exit" ] || [ "$REPO_NAME" = "quit" ]; then
+        break
+    fi
+    
+    # Suggest default paths for common repo types
+    DEFAULT_PATH=""
+    case "$REPO_NAME" in
+        video)
+            DEFAULT_PATH="../video-processing"
+            ;;
+        ros2|robot-control)
+            DEFAULT_PATH="../robot-control"
+            ;;
+        nlp)
+            DEFAULT_PATH="../nlp-service"
+            ;;
+    esac
+    
+    if [ -n "$DEFAULT_PATH" ]; then
+        read -p "Repository path [$DEFAULT_PATH]: " REPO_PATH
+        REPO_PATH=${REPO_PATH:-$DEFAULT_PATH}
+    else
+        read -p "Repository path: " REPO_PATH
+    fi
+    
+    if [ -z "$REPO_PATH" ]; then
+        echo "  ✗ Path cannot be empty, skipping..."
+        continue
+    fi
+    
+    # Convert to absolute path
+    REPO_ABS=$(cd "$PROJECT_ROOT" && cd "$REPO_PATH" 2>/dev/null && pwd || echo "")
+    
+    if [ -n "$REPO_ABS" ] && [ -d "$REPO_ABS" ]; then
+        echo "  ✓ $REPO_NAME repo found: $REPO_ABS"
+        cat >> "$REPOS_CONFIG" << EOF
+  ${REPO_NAME}:
     enabled: true
-    path: $VIDEO_ABS
-    type: video
+    path: $REPO_ABS
+    type: ${REPO_NAME}
 EOF
-else
-    echo "  ✗ Video repo not found at $VIDEO_PATH (will be disabled)"
-    cat >> "$REPOS_CONFIG" << EOF
-  video:
-    enabled: false
-    path: null
-    type: video
+        REPO_COUNT=$((REPO_COUNT + 1))
+        
+        # Update .env variables for common types
+        case "$REPO_NAME" in
+            video)
+                VIDEO_ABS="$REPO_ABS"
+                ;;
+            ros2|robot-control)
+                ROS2_ABS="$REPO_ABS"
+                ;;
+            nlp)
+                NLP_ABS="$REPO_ABS"
+                ;;
+        esac
+    else
+        echo "  ✗ Repository not found at $REPO_PATH"
+        read -p "  Add anyway? (y/N): " ADD_ANYWAY
+        if [[ "$ADD_ANYWAY" =~ ^[Yy]$ ]]; then
+            cat >> "$REPOS_CONFIG" << EOF
+  ${REPO_NAME}:
+    enabled: true
+    path: $REPO_PATH
+    type: ${REPO_NAME}
 EOF
-fi
+            REPO_COUNT=$((REPO_COUNT + 1))
+        else
+            echo "  Skipping $REPO_NAME"
+        fi
+    fi
+    echo ""
+done
 
-# ROS2 repo
-read -p "ROS2/robot-control repo path [../robot-control]: " ROS2_PATH
-ROS2_PATH=${ROS2_PATH:-../robot-control}
-ROS2_ABS=$(cd "$PROJECT_ROOT" && cd "$ROS2_PATH" 2>/dev/null && pwd || echo "")
-if [ -n "$ROS2_ABS" ] && [ -d "$ROS2_ABS" ]; then
-    echo "  ✓ ROS2 repo found: $ROS2_ABS"
-    cat >> "$REPOS_CONFIG" << EOF
-  ros2:
-    enabled: true
-    path: $ROS2_ABS
-    type: ros2
-EOF
-else
-    echo "  ✗ ROS2 repo not found at $ROS2_PATH (will be disabled)"
-    cat >> "$REPOS_CONFIG" << EOF
-  ros2:
-    enabled: false
-    path: null
-    type: ros2
-EOF
-fi
-
-# NLP repo
-read -p "NLP service repo path [../nlp-service]: " NLP_PATH
-NLP_PATH=${NLP_PATH:-../nlp-service}
-NLP_ABS=$(cd "$PROJECT_ROOT" && cd "$NLP_PATH" 2>/dev/null && pwd || echo "")
-if [ -n "$NLP_ABS" ] && [ -d "$NLP_ABS" ]; then
-    echo "  ✓ NLP repo found: $NLP_ABS"
-    cat >> "$REPOS_CONFIG" << EOF
-  nlp:
-    enabled: true
-    path: $NLP_ABS
-    type: nlp
-EOF
-else
-    echo "  ✗ NLP repo not found at $NLP_PATH (will be disabled)"
-    cat >> "$REPOS_CONFIG" << EOF
-  nlp:
-    enabled: false
-    path: null
-    type: nlp
-EOF
+if [ $REPO_COUNT -eq 0 ]; then
+    echo "No repositories added. You can add them later with: ./scripts/manage-repos.sh add <name> <path>"
 fi
 
 echo ""
@@ -137,11 +159,19 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
     if [ -f "$PROJECT_ROOT/.env.example" ]; then
         cp "$PROJECT_ROOT/.env.example" "$PROJECT_ROOT/.env"
         
-        # Update .env with detected profile and paths
+        # Update .env with detected profile
         sed -i.bak "s|^CROSSPLAY_PROFILE=.*|CROSSPLAY_PROFILE=$CROSSPLAY_PROFILE|" "$PROJECT_ROOT/.env"
-        sed -i.bak "s|^VIDEO_PATH=.*|VIDEO_PATH=${VIDEO_ABS:-$VIDEO_PATH}|" "$PROJECT_ROOT/.env"
-        sed -i.bak "s|^ROS2_PATH=.*|ROS2_PATH=${ROS2_ABS:-$ROS2_PATH}|" "$PROJECT_ROOT/.env"
-        sed -i.bak "s|^NLP_PATH=.*|NLP_PATH=${NLP_ABS:-$NLP_PATH}|" "$PROJECT_ROOT/.env"
+        
+        # Update .env with repo paths (only if they were set)
+        if [ -n "$VIDEO_ABS" ]; then
+            sed -i.bak "s|^VIDEO_PATH=.*|VIDEO_PATH=$VIDEO_ABS|" "$PROJECT_ROOT/.env"
+        fi
+        if [ -n "$ROS2_ABS" ]; then
+            sed -i.bak "s|^ROS2_PATH=.*|ROS2_PATH=$ROS2_ABS|" "$PROJECT_ROOT/.env"
+        fi
+        if [ -n "$NLP_ABS" ]; then
+            sed -i.bak "s|^NLP_PATH=.*|NLP_PATH=$NLP_ABS|" "$PROJECT_ROOT/.env"
+        fi
         rm -f "$PROJECT_ROOT/.env.bak"
         
         echo ".env file created from .env.example"
@@ -151,9 +181,18 @@ if [ ! -f "$PROJECT_ROOT/.env" ]; then
 COMPOSE_PROJECT_NAME=crossplay
 NETWORK_NAME=crossplay_net
 CROSSPLAY_PROFILE=$CROSSPLAY_PROFILE
-VIDEO_PATH=${VIDEO_ABS:-$VIDEO_PATH}
-ROS2_PATH=${ROS2_ABS:-$ROS2_PATH}
-NLP_PATH=${NLP_ABS:-$NLP_PATH}
+EOF
+        # Add repo paths if they were set
+        if [ -n "$VIDEO_ABS" ]; then
+            echo "VIDEO_PATH=$VIDEO_ABS" >> "$PROJECT_ROOT/.env"
+        fi
+        if [ -n "$ROS2_ABS" ]; then
+            echo "ROS2_PATH=$ROS2_ABS" >> "$PROJECT_ROOT/.env"
+        fi
+        if [ -n "$NLP_ABS" ]; then
+            echo "NLP_PATH=$NLP_ABS" >> "$PROJECT_ROOT/.env"
+        fi
+        cat >> "$PROJECT_ROOT/.env" << EOF
 VIDEO_PORT=8081
 NLP_PORT=8082
 ROS_DOMAIN_ID=0

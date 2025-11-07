@@ -53,7 +53,9 @@ if command -v nvidia-smi &> /dev/null; then
 fi
 
 # Detect Jetson
-if [ -f /etc/nv_tegra_release ] || [ -f /proc/device-tree/model ] && grep -q "jetson\|tegra" /proc/device-tree/model 2>/dev/null; then
+if [ -f /etc/nv_tegra_release ]; then
+    IS_JETSON=true
+elif [ -f /proc/device-tree/model ] && grep -qi "jetson\|tegra" /proc/device-tree/model 2>/dev/null; then
     IS_JETSON=true
 fi
 

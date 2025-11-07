@@ -58,9 +58,36 @@ Run the setup script to configure crossplay:
 
 The setup script will:
 - Detect your host platform
-- Prompt for sibling repository paths
+- Interactively prompt you to add sibling repositories (you can add as many as needed)
 - Generate configuration files
 - Create `.env` file from template
+
+**Repository Setup Process:**
+The setup script uses an interactive loop where you:
+1. Enter a repository name (e.g., `video`, `ros2`, `nlp`, or any custom name)
+2. Enter the path to that repository
+3. Repeat for additional repositories
+4. Type `done` when finished
+
+Example:
+```
+=== Repository Configuration ===
+Add sibling repositories. Enter repo name and path for each repository.
+Common repo types: video, ros2, nlp (or any custom name)
+Type 'done' when finished adding repositories.
+
+Repository name (or 'done' to finish): video
+Repository path [../video-processing]: /path/to/video-repo
+  ✓ video repo found: /path/to/video-repo
+
+Repository name (or 'done' to finish): ros2
+Repository path [../robot-control]: /path/to/ros2-repo
+  ✓ ros2 repo found: /path/to/ros2-repo
+
+Repository name (or 'done' to finish): done
+```
+
+The script will suggest default paths for common repository types (`video`, `ros2`, `nlp`) but you can use any name and path.
 
 ### 2. Launch Services
 
@@ -142,7 +169,7 @@ Crossplay uses profiles to determine which compose files to use:
 
 ### Method 1: During Setup
 
-The setup script will prompt you for repository paths during initial configuration.
+The setup script uses an interactive loop where you can add multiple repositories. Simply enter the repository name and path when prompted, and type `done` when finished. You can add any number of repositories with custom names.
 
 ### Method 2: Using manage-repos Script
 

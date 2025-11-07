@@ -66,85 +66,98 @@ repositories:
 
 # Interactive repo selection
 Write-Host "=== Repository Configuration ===" -ForegroundColor Cyan
-Write-Host "Please specify paths to sibling repositories (press Enter to skip)"
+Write-Host "Add sibling repositories. Enter repo name and path for each repository."
+Write-Host "Common repo types: video, ros2, nlp (or any custom name)"
+Write-Host "Type 'done' when finished adding repositories."
 Write-Host ""
 
-# Video processing repo
-$VideoPath = Read-Host "Video processing repo path [../video-processing]"
-if ([string]::IsNullOrWhiteSpace($VideoPath)) {
-    $VideoPath = "../video-processing"
-}
-$VideoAbs = Resolve-Path (Join-Path $ProjectRoot $VideoPath) -ErrorAction SilentlyContinue
-if ($VideoAbs -and (Test-Path $VideoAbs -PathType Container)) {
-    Write-Host "  ✓ Video repo found: $VideoAbs" -ForegroundColor Green
-    $ConfigContent += @"
+$RepoCount = 0
+$VideoAbs = $null
+$Ros2Abs = $null
+$NlpAbs = $null
 
-  video:
+while ($true) {
+    $RepoName = Read-Host "Repository name (or 'done' to finish)"
+    $RepoName = $RepoName.Trim().ToLower()
+    
+    if ([string]::IsNullOrWhiteSpace($RepoName)) {
+        continue
+    }
+    
+    if ($RepoName -eq "done" -or $RepoName -eq "exit" -or $RepoName -eq "quit") {
+        break
+    }
+    
+    # Suggest default paths for common repo types
+    $DefaultPath = ""
+    switch ($RepoName) {
+        "video" { $DefaultPath = "../video-processing" }
+        "ros2" { $DefaultPath = "../robot-control" }
+        "robot-control" { $DefaultPath = "../robot-control" }
+        "nlp" { $DefaultPath = "../nlp-service" }
+    }
+    
+    if ($DefaultPath) {
+        $RepoPath = Read-Host "Repository path [$DefaultPath]"
+        if ([string]::IsNullOrWhiteSpace($RepoPath)) {
+            $RepoPath = $DefaultPath
+        }
+    } else {
+        $RepoPath = Read-Host "Repository path"
+    }
+    
+    if ([string]::IsNullOrWhiteSpace($RepoPath)) {
+        Write-Host "  ✗ Path cannot be empty, skipping..." -ForegroundColor Yellow
+        continue
+    }
+    
+    # Convert to absolute path
+    try {
+        $RepoAbs = Resolve-Path (Join-Path $ProjectRoot $RepoPath) -ErrorAction Stop
+        if (-not (Test-Path $RepoAbs -PathType Container)) {
+            throw "Not a directory"
+        }
+    } catch {
+        Write-Host "  ✗ Repository not found at $RepoPath" -ForegroundColor Yellow
+        $AddAnyway = Read-Host "  Add anyway? (y/N)"
+        if ($AddAnyway -match "^[Yy]$") {
+            $ConfigContent += @"
+
+  ${RepoName}:
     enabled: true
-    path: $($VideoAbs.Path)
-    type: video
+    path: $RepoPath
+    type: ${RepoName}
 "@
-} else {
-    Write-Host "  ✗ Video repo not found at $VideoPath (will be disabled)" -ForegroundColor Yellow
+            $RepoCount++
+        } else {
+            Write-Host "  Skipping $RepoName" -ForegroundColor Yellow
+        }
+        Write-Host ""
+        continue
+    }
+    
+    Write-Host "  ✓ $RepoName repo found: $($RepoAbs.Path)" -ForegroundColor Green
     $ConfigContent += @"
 
-  video:
-    enabled: false
-    path: null
-    type: video
-"@
-}
-
-# ROS2 repo
-$Ros2Path = Read-Host "ROS2/robot-control repo path [../robot-control]"
-if ([string]::IsNullOrWhiteSpace($Ros2Path)) {
-    $Ros2Path = "../robot-control"
-}
-$Ros2Abs = Resolve-Path (Join-Path $ProjectRoot $Ros2Path) -ErrorAction SilentlyContinue
-if ($Ros2Abs -and (Test-Path $Ros2Abs -PathType Container)) {
-    Write-Host "  ✓ ROS2 repo found: $Ros2Abs" -ForegroundColor Green
-    $ConfigContent += @"
-
-  ros2:
+  ${RepoName}:
     enabled: true
-    path: $($Ros2Abs.Path)
-    type: ros2
+    path: $($RepoAbs.Path)
+    type: ${RepoName}
 "@
-} else {
-    Write-Host "  ✗ ROS2 repo not found at $Ros2Path (will be disabled)" -ForegroundColor Yellow
-    $ConfigContent += @"
-
-  ros2:
-    enabled: false
-    path: null
-    type: ros2
-"@
+    $RepoCount++
+    
+    # Update .env variables for common types
+    switch ($RepoName) {
+        "video" { $VideoAbs = $RepoAbs }
+        "ros2" { $Ros2Abs = $RepoAbs }
+        "robot-control" { $Ros2Abs = $RepoAbs }
+        "nlp" { $NlpAbs = $RepoAbs }
+    }
+    Write-Host ""
 }
 
-# NLP repo
-$NlpPath = Read-Host "NLP service repo path [../nlp-service]"
-if ([string]::IsNullOrWhiteSpace($NlpPath)) {
-    $NlpPath = "../nlp-service"
-}
-$NlpAbs = Resolve-Path (Join-Path $ProjectRoot $NlpPath) -ErrorAction SilentlyContinue
-if ($NlpAbs -and (Test-Path $NlpAbs -PathType Container)) {
-    Write-Host "  ✓ NLP repo found: $NlpAbs" -ForegroundColor Green
-    $ConfigContent += @"
-
-  nlp:
-    enabled: true
-    path: $($NlpAbs.Path)
-    type: nlp
-"@
-} else {
-    Write-Host "  ✗ NLP repo not found at $NlpPath (will be disabled)" -ForegroundColor Yellow
-    $ConfigContent += @"
-
-  nlp:
-    enabled: false
-    path: null
-    type: nlp
-"@
+if ($RepoCount -eq 0) {
+    Write-Host "No repositories added. You can add them later with: .\scripts\manage-repos.ps1 add <name> <path>" -ForegroundColor Yellow
 }
 
 $ConfigContent | Out-File -FilePath $ReposConfig -Encoding UTF8
@@ -159,15 +172,15 @@ if (-not (Test-Path $EnvFile)) {
     if (Test-Path $EnvExample) {
         Copy-Item $EnvExample $EnvFile
         
-        # Update .env with detected profile and paths
+        # Update .env with detected profile
         (Get-Content $EnvFile) | ForEach-Object {
             if ($_ -match "^CROSSPLAY_PROFILE=") {
                 "CROSSPLAY_PROFILE=$CROSSPLAY_PROFILE"
-            } elseif ($_ -match "^VIDEO_PATH=") {
+            } elseif ($_ -match "^VIDEO_PATH=" -and $VideoAbs) {
                 "VIDEO_PATH=$($VideoAbs.Path)"
-            } elseif ($_ -match "^ROS2_PATH=") {
+            } elseif ($_ -match "^ROS2_PATH=" -and $Ros2Abs) {
                 "ROS2_PATH=$($Ros2Abs.Path)"
-            } elseif ($_ -match "^NLP_PATH=") {
+            } elseif ($_ -match "^NLP_PATH=" -and $NlpAbs) {
                 "NLP_PATH=$($NlpAbs.Path)"
             } else {
                 $_
@@ -177,17 +190,28 @@ if (-not (Test-Path $EnvFile)) {
         Write-Host ".env file created from .env.example" -ForegroundColor Green
     } else {
         Write-Host "WARNING: .env.example not found, creating basic .env" -ForegroundColor Yellow
-        @"
+        $EnvContent = @"
 COMPOSE_PROJECT_NAME=crossplay
 NETWORK_NAME=crossplay_net
 CROSSPLAY_PROFILE=$CROSSPLAY_PROFILE
-VIDEO_PATH=$($VideoAbs.Path)
-ROS2_PATH=$($Ros2Abs.Path)
-NLP_PATH=$($NlpAbs.Path)
+"@
+        # Add repo paths if they were set
+        if ($VideoAbs) {
+            $EnvContent += "`nVIDEO_PATH=$($VideoAbs.Path)"
+        }
+        if ($Ros2Abs) {
+            $EnvContent += "`nROS2_PATH=$($Ros2Abs.Path)"
+        }
+        if ($NlpAbs) {
+            $EnvContent += "`nNLP_PATH=$($NlpAbs.Path)"
+        }
+        $EnvContent += @"
+
 VIDEO_PORT=8081
 NLP_PORT=8082
 ROS_DOMAIN_ID=0
-"@ | Out-File -FilePath $EnvFile -Encoding UTF8
+"@
+        $EnvContent | Out-File -FilePath $EnvFile -Encoding UTF8
     }
 } else {
     Write-Host ".env file already exists, skipping creation" -ForegroundColor Yellow
