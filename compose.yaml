@@ -1,0 +1,19 @@
+# Base Docker Compose file for crossplay
+# This file defines common services, networks, and volumes
+# Platform-specific overrides are in compose.*.yaml files
+# Feature profiles are in profiles/*.yaml files
+
+version: '3.8'
+
+services:
+  # Base service definitions will be extended by profile files
+  # Services are defined in profiles/video.yaml, profiles/ros2.yaml, profiles/nlp.yaml
+
+networks:
+  crossplay_net:
+    name: ${NETWORK_NAME:-crossplay_net}
+    driver: bridge
+
+volumes:
+  # Add any common volumes here if needed
+

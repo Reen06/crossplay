@@ -1,0 +1,27 @@
+# ROS2/robot-control service profile
+# This service provides ROS2 capabilities with host networking on Linux
+
+version: '3.8'
+
+services:
+  ros2:
+    image: ${APP_IMAGE:-yourorg/crossplay-app:latest}
+    build:
+      context: ${ROS2_PATH:-../robot-control}
+      dockerfile: Dockerfile
+    container_name: crossplay_ros2
+    # Use host network on Linux, bridge on Windows/macOS
+    # This will be handled by platform-specific overrides if needed
+    networks:
+      - crossplay_net
+    volumes:
+      - "${ROS2_PATH:-../robot-control}:/workspace/ros2:ro"
+    environment:
+      - SERVICE_TYPE=ros2
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+    # On Linux, use host network for ROS2 DDS discovery
+    # This is typically set via platform-specific compose files
+    restart: unless-stopped
+    # ROS2 services typically don't have HTTP health checks
+    # Remove healthcheck or customize based on your ROS2 setup
+

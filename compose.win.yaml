@@ -1,0 +1,14 @@
+# Windows/WSL2 specific overrides
+# Extends compose.yaml with Windows-specific configurations
+
+version: '3.8'
+
+services:
+  # GPU support via WSL2
+  # Note: GPU services should use device_requests in their profile files
+  # This file can add Windows-specific environment variables or path handling
+
+  # Example: If you need Windows path conversions
+  # environment:
+  #   - WINDOWS_HOST=true
+

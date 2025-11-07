@@ -1,0 +1,37 @@
+# NLP service profile
+# This service provides NLP capabilities with GPU support
+
+version: '3.8'
+
+services:
+  nlp:
+    image: ${APP_IMAGE:-yourorg/crossplay-app:latest}
+    build:
+      context: ${NLP_PATH:-../nlp-service}
+      dockerfile: Dockerfile
+    container_name: crossplay_nlp
+    networks:
+      - crossplay_net
+    ports:
+      - "${NLP_PORT:-8082}:8082"
+    volumes:
+      - "${NLP_PATH:-../nlp-service}:/workspace/nlp:ro"
+    environment:
+      - SERVICE_TYPE=nlp
+      - PORT=${NLP_PORT:-8082}
+    # GPU support (will be applied on platforms that support it)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${NLP_PORT:-8082}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

@@ -1,0 +1,16 @@
+# Jetson L4T-specific overrides
+# Extends compose.yaml with Jetson-specific configurations
+
+version: '3.8'
+
+services:
+  # All services on Jetson will use Jetson-specific base image
+  # GPU support is handled via NVIDIA_VISIBLE_DEVICES environment variable
+  
+  # Common environment for all services on Jetson
+  # Individual services can override these in their profile files
+  environment:
+    - NVIDIA_VISIBLE_DEVICES=all
+    - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    - JETSON_HOST=true
+

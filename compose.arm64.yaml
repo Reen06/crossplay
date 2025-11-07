@@ -1,0 +1,13 @@
+# Generic ARM64 (Raspberry Pi) CPU-only overrides
+# Extends compose.yaml with ARM64 CPU-only configuration
+
+version: '3.8'
+
+services:
+  # ARM64 CPU-only configuration
+  # No GPU support, optimized for Raspberry Pi or other ARM64 devices
+  
+  environment:
+    - ARM64_HOST=true
+    - CPU_ONLY=true
+
